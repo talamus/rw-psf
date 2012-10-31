@@ -1,0 +1,231 @@
+
+# About ################################################################
+
+## Read and Write PSF (Linux Console Font) Files
+
+This package provides two perl programs for reading and writing PSF
+font files. It is not a font editor per-se – but when combined with
+powerful text editor or paint software it pretty much is the best
+one available!
+
+### Design Principle
+
+* Be simple. (Just two perl files: `readpsf` and `writepsf`)
+* Absolutely no dependencies. (Plain vanilla perl 5 is enough.)
+* Support both plain text files and bitmap images.
+* Allow changing the font geometry. (E.g. making the font taller or wider.)
+
+### File Formats
+
+The plain text format is same that [NAFE](http://nafe.sourceforge.net/)
+uses. It is very simple and flexible.
+
+The bitmap format is [24-bit
+BMP](http://en.wikipedia.org/wiki/BMP_file_format). The rationale is
+that 99% of graphics software can read and write BMP files natively.
+Also, reading and writing uncompressed 24-bit BMP images from perl
+is very easy and requires no external libraries.
+
+
+# Basic Usage ##########################################################
+
+### ① Find console font files on your Linux distribution:
+
+    $ find /usr/ -name '*.psf*' | less
+
+### ② Copy one of those files to your local directory and unzip it:
+
+    $ cd ~     # or some other directory you have read/write permissions
+    $ cp /usr/share/consolefonts/LatGrkCyr-12x22.psfu.gz .
+    $ gunzip LatGrkCyr-12x22.psfu.gz
+
+### ③ Convert the PSF-font into a BMP image:
+
+    $ readpsf LatGrkCyr-12x22.psfu bmp
+    Reading 'LatGrkCyr-12x22.psfu'...
+    Version 2 PSF file.
+    Font has an unicode table. Use 'psfgettable' command to extract it.
+    PSF file suggests 512 glyphs of size 12 x 22.
+    512 glyphs found.
+
+    Creating an image.
+
+    'LatGrkCyr-12x22.12x22.bmp' written. All Ok.
+
+### ④ Extract the embedded Unicode character table from the console font:
+
+    $ psfgettable LatGrkCyr-12x22.psfu LatGrkCyr-12x22.table
+
+### ⑤ Edit the BMP image with your favourite bitmap editing program:
+
+E.g. draw an infinity symbol (U+221E) at unused character
+position 29 (0x01d).
+
+### ⑥ Convert the BMP image back to a PSF-font:
+
+    $ write-psf LatGrkCyr-12x22.12x22.bmp LatGrkCyr-12x22-inf.psf
+    Reading 'LatGrkCyr-12x22.12x22.bmp'...
+    Were are assuming 16 characters per row. Override this with '-br'.
+    Were are assuming total of 512 characters. Override this with '-c'.
+    BMP file suggests 512 glyphs of size 12 x 22.
+    512 glyphs found.
+
+    Writing 'LatGrkCyr-12x22-inf.psf'...
+    512 glyphs written.
+    'LatGrkCyr-12x22-inf.psf' written. All Ok.
+
+### ⑦ Now we can test our new font:
+
+    $ setfont LatGrkCyr-12x22-inf.psf
+    $ showconsolefont
+
+## Adding Unicode Mappings
+
+The new font contains an infinity symbol, but we still have to tell
+Linux console that the symbol is now available!
+
+### ⑧ Edit the Unicode character table
+
+Open (with your favourite text editor) the `LatGrkCyr-12x22.table`
+file that was extracted with the `psfgettable` command. Seek the
+line beginning `0x01d` and add `U+221E` into it:
+
+    0x01d U+221E
+
+Save this new table as `LatGrkCyr-12x22-inf.table`.
+
+### ⑨ Add this new table to the font we created:
+
+    $ psfaddtable LatGrkCyr-12x22-inf.psf LatGrkCyr-12x22-inf.table LatGrkCyr-12x22-inf.psfu
+
+(Please note that by tradition files ending with `.psf` are files
+without an Unicode table, and files ending with `.psfu` contain an
+Unicode table.)
+
+### ⑩ Load our new font and test our new infinity symbol:
+
+    $ setfont LatGrkCyr-12x22-inf.psfu
+    $ echo -e '\u221e'
+    ∞
+
+Rinse and repeat!
+
+(`setfont`, `showconsolefont`, `psfgettable`, and `psfaddtable`
+commands are in most distros located in the `console-tools` package.)
+
+
+# Changing Font Geometry ###############################################
+
+Both `readpsf` and `writepsf` have the following command line options:
+
+    Geometry:
+      -tN  --top=N        Override character geometry.
+      -lN  --left=N       (Top and left can be negative numbers.)
+      -wN  --width=N
+      -hN  --height=N
+
+    Edge:
+      -ew  --edge=wrap    When running out of pixels: wrap character.
+      -er  --edge=repeat  When running out of pixels: repeat edge pixels.
+                          (Default action: use empty pixels.)
+
+With these you can manipulate the character geometry. The default
+character geometry is something like this:
+
+      01234567
+     0░░░░░░░░    Top: 0
+     1░░███░░░    Left: 0
+     2░██░██░░
+     3██░░░██░    Width: 8
+     4██░░░██░    Height: 12
+     5███████░
+     6██░░░██░
+     7██░░░██░
+     8██░░░██░
+     9██░░░██░
+    10░░░░░░░░
+    11░░░░░░░░
+
+If you set the `top` and `left` to negative numbers the character
+geometry will change to something like this:
+
+     -10123456
+    -3▒▒▒▒▒▒▒▒    Top: -3
+    -2▒▒▒▒▒▒▒▒    Left: -1
+    -1▒▒▒▒▒▒▒▒
+     0▒░░░░░░░    Width: 8
+     1▒░░███░░    Height: 12
+     2▒░██░██░
+     3▒██░░░██    ▒ = New pixels (Default action: use empty pixels.)
+     4▒██░░░██
+     5▒███████
+     6▒██░░░██
+     7▒██░░░██
+     8▒██░░░██
+
+Because width and height remained the same the character was
+cropped. To make character genuinely larger you have to also set the
+`width` and `height`:
+
+     -1012345678
+    -3▒▒▒▒▒▒▒▒▒▒    Top: -3
+    -2▒▒▒▒▒▒▒▒▒▒    Left: -1
+    -1▒▒▒▒▒▒▒▒▒▒
+     0▒░░░░░░░░▒    Width: 10
+     1▒░░███░░░▒    Height: 16
+     2▒░██░██░░▒
+     3▒██░░░██░▒    ▒ = New pixels (Default action: use empty pixels.)
+     4▒██░░░██░▒
+     5▒███████░▒
+     6▒██░░░██░▒
+     7▒██░░░██░▒
+     8▒██░░░██░▒
+     9▒██░░░██░▒
+    10▒░░░░░░░░▒
+    11▒░░░░░░░░▒
+    12▒▒▒▒▒▒▒▒▒▒
+
+By default the new pixels are created empty. With the `edge` option
+you can either `wrap` the current character over, or `repeat` the
+edge pixels. This is especially handy with the box drawing
+characters. (╨, ╪, ╕, ╫ et al.)
+
+       Default:        Wrap:           Repeat:
+
+     -1012345678     -1012345678     -1012345678
+    -3▒▒▒▒▒▒▒▒▒▒    -3▒▒██▒██▒▒▒    -3▒▒▒▒▒▒▒▒▒▒    Top: -3
+    -2▒▒▒▒▒▒▒▒▒▒    -2▒▒██▒██▒▒▒    -2▒▒▒▒▒▒▒▒▒▒    Left: -1
+    -1▒▒▒▒▒▒▒▒▒▒    -1▒▒██▒██▒▒▒    -1▒▒▒▒▒▒▒▒▒▒
+     0▒░░░░░░░░▒     0▒░░░░░░░░▒     0▒░░░░░░░░▒    Width: 10
+     1▒░░░░░░░░▒     1▒░░░░░░░░▒     1▒░░░░░░░░▒    Height: 16
+     2▒░░░░░░░░▒     2▒░░░░░░░░▒     2▒░░░░░░░░▒
+     3▒░░░░░░░░▒     3▒░░░░░░░░▒     3▒░░░░░░░░▒    ▒ = New pixels
+     4▒░███████▒     4█░███████▒     4▒░████████
+     5▒░██░░░░░▒     5▒░██░░░░░▒     5▒░██░░░░░▒
+     6▒░██░████▒     6█░██░████▒     6▒░██░█████
+     7▒░██░██░░▒     7▒░██░██░░▒     7▒░██░██░░▒
+     8▒░██░██░░▒     8▒░██░██░░▒     8▒░██░██░░▒
+     9▒░██░██░░▒     9▒░██░██░░▒     9▒░██░██░░▒
+    10▒░██░██░░▒    10▒░██░██░░▒    10▒░██░██░░▒
+    11▒░██░██░░▒    11▒░██░██░░▒    11▒░██░██░░▒
+    12▒▒▒▒▒▒▒▒▒▒    12▒▒▒▒▒▒▒▒▒▒    12▒▒██▒██▒▒▒
+
+Because both `readpsf` and `writepsf` support these options you can
+first create one base BMP file, manually fix it, and then (when you
+know it will grow without edge problems) create multiple larger ones
+from it:
+
+    $ readpsf --top=-1 --left=-1 --width=10 --height=16 --edge=wrap font8x14.psf bmp
+
+    Manually fix the font, save it as 'stretchable.bmp'.
+    Then create different line heights easily from it:
+
+    $ readpsf --top=-1 --height=18 --edge=repeat stretchable.bmp font10x18.psf
+    $ readpsf --top=-1 --height=19 --edge=repeat stretchable.bmp font10x19.psf
+    $ readpsf --top=-2 --height=20 --edge=repeat stretchable.bmp font10x20.psf
+    $ readpsf --top=-2 --height=21 --edge=repeat stretchable.bmp font10x21.psf
+    $ readpsf --top=-3 --height=22 --edge=repeat stretchable.bmp font10x22.psf
+
+# Thank You! ###########################################################
+
+Have fun!
